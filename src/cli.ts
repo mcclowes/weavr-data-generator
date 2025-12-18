@@ -1,15 +1,45 @@
 #!/usr/bin/env node
 
 import { writeFile, mkdir } from "fs/promises";
-import { dirname, resolve } from "path";
+import { dirname, resolve, relative, basename } from "path";
+import { spawn } from "child_process";
 import { loadOpenAPISpec } from "./parser.js";
-import { generateVagueFile } from "./generator.js";
+import { generateVagueFileWithOverrides } from "./generator.js";
 import {
   promptForSchemas,
   promptForCounts,
   promptForOutputPath,
   promptForDatasetName,
 } from "./prompts.js";
+
+function runVague(vagueFile: string, jsonOutput: string): Promise<void> {
+  return new Promise((resolvePromise, reject) => {
+    console.log(`\nGenerating JSON fixtures...`);
+
+    // Run from the directory containing the .vague file so imports resolve correctly
+    const cwd = dirname(vagueFile);
+    const vagueFileName = basename(vagueFile);
+    const jsonFileName = basename(jsonOutput);
+
+    const proc = spawn("npx", ["vague-lang", vagueFileName, "-o", jsonFileName], {
+      stdio: "inherit",
+      shell: true,
+      cwd,
+    });
+
+    proc.on("close", (code) => {
+      if (code === 0) {
+        resolvePromise();
+      } else {
+        reject(new Error(`Vague CLI exited with code ${code}`));
+      }
+    });
+
+    proc.on("error", (err) => {
+      reject(err);
+    });
+  });
+}
 
 async function main() {
   const args = process.argv.slice(2);
@@ -33,29 +63,35 @@ async function main() {
     console.log(`\nSelected ${selectedSchemas.length} schemas\n`);
 
     const counts = await promptForCounts(selectedSchemas);
-    const datasetName = await promptForDatasetName();
-    const outputPath = await promptForOutputPath();
+    const datasetName = await promptForDatasetName(selectedSchemas);
+    const outputPath = await promptForOutputPath(selectedSchemas);
 
-    // Generate Vague file
-    const vagueContent = generateVagueFile(
-      spec,
-      selectedSchemas,
+    // Calculate relative path from output directory to spec file
+    const resolvedOutput = resolve(outputPath);
+    const resolvedSpec = resolve(specPath);
+    const relativeSpecPath = relative(dirname(resolvedOutput), resolvedSpec);
+
+    // Generate Vague file (imports OpenAPI spec, only adds overrides)
+    const vagueContent = generateVagueFileWithOverrides(spec, {
+      specPath: relativeSpecPath,
+      schemaNames: selectedSchemas,
       datasetName,
-      counts
-    );
+      counts,
+    });
 
     // Write output
-    const resolvedOutput = resolve(outputPath);
     await mkdir(dirname(resolvedOutput), { recursive: true });
     await writeFile(resolvedOutput, vagueContent, "utf-8");
 
     console.log(`\n✓ Generated: ${resolvedOutput}`);
-    console.log(
-      "\nNext steps:\n" +
-        "  1. Edit the .vague file to customize field constraints\n" +
-        "  2. Run vague CLI to generate JSON fixtures:\n" +
-        `     npx vague ${outputPath} -o fixtures.json\n`
-    );
+
+    // Derive JSON output path from vague file path
+    const jsonOutput = resolvedOutput.replace(/\.vague$/, ".json");
+
+    // Execute vague CLI
+    await runVague(resolvedOutput, jsonOutput);
+
+    console.log(`\n✓ Fixtures written to: ${jsonOutput}`);
   } catch (error) {
     console.error("Error:", error instanceof Error ? error.message : error);
     process.exit(1);

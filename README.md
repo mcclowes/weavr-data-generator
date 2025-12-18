@@ -23,49 +23,41 @@ npm start
 
 3. Configure counts and output path
 
-4. Edit the generated `.vague` file to customize field constraints
-
-5. Generate JSON fixtures using the Vague CLI:
-   ```bash
-   npx vague ./output/fixtures.vague -o fixtures.json
-   ```
+4. The tool generates a `.vague` file and automatically runs the Vague CLI to produce JSON fixtures
 
 ## Workflow
 
 ```
-embedder.json (OpenAPI) → weavr-gen → fixtures.vague → vague CLI → fixtures.json
+embedder.json (OpenAPI) → weavr-gen → fixtures.vague + fixtures.json
 ```
 
 The tool:
-- Parses the OpenAPI spec and extracts schema definitions
-- Converts OpenAPI schemas to Vague syntax with appropriate generators
-- Handles `$ref` references, `oneOf`, `allOf`, enums, and nested objects
-- Generates realistic data using Vague's faker integration
+- Imports the OpenAPI spec directly (no duplication)
+- Generates schema extensions with smart field overrides
+- Automatically runs Vague CLI to produce JSON fixtures
 
 ## Example Output
 
 ```vague
-// The object representing a monetary amount in a particular currency.
-schema CurrencyAmount {
-  // Currency code
-  currency: "EUR" | "GBP" | "USD"
-  // The monetary amount, scaled to the lowest denomination
-  amount: int in 1..10000
+import weavr from "./embedder.json"
+
+schema ManagedAccount from weavr.ManagedAccount {
+  id: digits(12)
+  // Add more field overrides as needed
 }
 
-schema ManagedAccount {
-  id: digits(10)
-  profileId: digits(10)
-  friendlyName: alphanumeric(50)
-  currency: "EUR" | "GBP" | "USD"
-  balances: ManagedInstrumentBalance
-  state: "ACTIVE" | "BLOCKED" | "DESTROYED"
+schema User from weavr.User {
+  email: email()
+  locale: "en" | "en-GB" | "en-US" | "de" | "fr"
 }
 
 dataset WeavrFixtures {
   managedAccounts: 10 of ManagedAccount
+  users: 10 of User
 }
 ```
+
+The generated `.vague` file imports from the OpenAPI spec and only includes field overrides where custom Vague generators improve data quality (emails, locales, numeric IDs, etc.).
 
 ## Development
 

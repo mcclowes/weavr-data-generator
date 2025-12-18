@@ -28,6 +28,7 @@
     "vitest": "^1.0.0"
   },
   "dependencies": {
-    "@inquirer/prompts": "^7.0.0"
+    "@inquirer/prompts": "^7.0.0",
+    "vague-lang": "^3.2.0"
   }
 }

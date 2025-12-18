@@ -104,16 +104,36 @@ export async function promptForCounts(
   return counts;
 }
 
-export async function promptForOutputPath(): Promise<string> {
+export async function promptForOutputPath(schemas: string[]): Promise<string> {
+  // Generate a descriptive filename based on selected schemas
+  let filename: string;
+  if (schemas.length === 1) {
+    filename = toKebabCase(schemas[0]);
+  } else if (schemas.length <= 3) {
+    filename = schemas.map(toKebabCase).join("-");
+  } else {
+    filename = `${schemas.map(toKebabCase).slice(0, 2).join("-")}-and-${schemas.length - 2}-more`;
+  }
+
   return input({
     message: "Output file path:",
-    default: "./output/fixtures.vague",
+    default: `./output/${filename}.vague`,
   });
 }
 
-export async function promptForDatasetName(): Promise<string> {
+function toKebabCase(str: string): string {
+  return str
+    .replace(/([a-z])([A-Z])/g, "$1-$2")
+    .toLowerCase();
+}
+
+export async function promptForDatasetName(schemas: string[]): Promise<string> {
+  const defaultName = schemas.length === 1
+    ? `${schemas[0]}Fixtures`
+    : "WeavrFixtures";
+
   return input({
     message: "Dataset name:",
-    default: "WeavrFixtures",
+    default: defaultName,
   });
 }
