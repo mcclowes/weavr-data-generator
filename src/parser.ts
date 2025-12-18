@@ -65,7 +65,7 @@ function parseSchemaFields(
 function resolveAllOf(spec: OpenAPISpec, schema: OpenAPISchema): OpenAPISchema {
   if (!schema.allOf) return schema;
 
-  let merged: OpenAPISchema = { type: "object", properties: {}, required: [] };
+  const merged: OpenAPISchema = { type: "object", properties: {}, required: [] };
 
   for (const part of schema.allOf) {
     const resolved = part.$ref ? resolveRef(spec, part.$ref) : part;
@@ -105,9 +105,7 @@ function parseFieldType(
   if (schema.oneOf) {
     return {
       kind: "oneOf",
-      options: schema.oneOf.map((opt) =>
-        parseFieldType(spec, opt, dependencies, visited)
-      ),
+      options: schema.oneOf.map((opt) => parseFieldType(spec, opt, dependencies, visited)),
     };
   }
 
@@ -132,9 +130,7 @@ function parseFieldType(
   return { kind: "primitive", type: mapPrimitiveType(schema) };
 }
 
-function mapPrimitiveType(
-  schema: OpenAPISchema
-): "string" | "int" | "decimal" | "boolean" {
+function mapPrimitiveType(schema: OpenAPISchema): "string" | "int" | "decimal" | "boolean" {
   switch (schema.type) {
     case "integer":
       return "int";

@@ -1,4 +1,4 @@
-import { checkbox, input, confirm } from "@inquirer/prompts";
+import { checkbox, input, confirm, Separator } from "@inquirer/prompts";
 import type { OpenAPISpec } from "./types.js";
 import { extractSchemaNames } from "./parser.js";
 
@@ -45,7 +45,7 @@ export async function promptForSchemas(spec: OpenAPISpec): Promise<string[]> {
   const categories = categorizeSchemas(allSchemas);
 
   // Build choices with separators for categories
-  const choices: Array<{ name: string; value: string } | { type: "separator"; separator: string }> = [];
+  const choices: Array<{ name: string; value: string } | Separator> = [];
 
   // Prioritize important categories first
   const orderedCategories = [
@@ -63,25 +63,23 @@ export async function promptForSchemas(spec: OpenAPISpec): Promise<string[]> {
   for (const category of orderedCategories) {
     const schemas = categories.get(category);
     if (schemas && schemas.length > 0) {
-      choices.push({ type: "separator", separator: `── ${category} ──` });
+      choices.push(new Separator(`── ${category} ──`));
       for (const schema of schemas.sort()) {
         choices.push({ name: schema, value: schema });
       }
     }
   }
 
-  const selected = await checkbox({
+  const selected = await checkbox<string>({
     message: "Select schemas to generate (space to toggle, enter to confirm):",
-    choices: choices as any,
+    choices,
     pageSize: 20,
   });
 
-  return selected as string[];
+  return selected;
 }
 
-export async function promptForCounts(
-  schemas: string[]
-): Promise<Record<string, number>> {
+export async function promptForCounts(schemas: string[]): Promise<Record<string, number>> {
   const useDefaults = await confirm({
     message: "Use default count of 10 for all schemas?",
     default: true,
@@ -122,15 +120,11 @@ export async function promptForOutputPath(schemas: string[]): Promise<string> {
 }
 
 function toKebabCase(str: string): string {
-  return str
-    .replace(/([a-z])([A-Z])/g, "$1-$2")
-    .toLowerCase();
+  return str.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
 }
 
 export async function promptForDatasetName(schemas: string[]): Promise<string> {
-  const defaultName = schemas.length === 1
-    ? `${schemas[0]}Fixtures`
-    : "WeavrFixtures";
+  const defaultName = schemas.length === 1 ? `${schemas[0]}Fixtures` : "WeavrFixtures";
 
   return input({
     message: "Dataset name:",

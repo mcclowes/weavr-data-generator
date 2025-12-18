@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
-import { writeFile, mkdir } from "fs/promises";
+import { readFile, writeFile, mkdir } from "fs/promises";
 import { dirname, resolve, relative, basename } from "path";
 import { spawn } from "child_process";
+import { fileURLToPath } from "url";
 import { loadOpenAPISpec } from "./parser.js";
 import { generateVagueFileWithOverrides } from "./generator.js";
 import {
@@ -11,6 +12,41 @@ import {
   promptForOutputPath,
   promptForDatasetName,
 } from "./prompts.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+async function getVersion(): Promise<string> {
+  try {
+    const pkgPath = resolve(__dirname, "../package.json");
+    const pkg = JSON.parse(await readFile(pkgPath, "utf-8"));
+    return pkg.version ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+function printHelp() {
+  console.log(`
+Weavr Data Generator
+
+Generate Vague schemas and JSON fixtures from Weavr OpenAPI specifications.
+
+Usage:
+  weavr-gen [options] [spec-path]
+
+Arguments:
+  spec-path           Path to OpenAPI spec file (default: ./embedder.json)
+
+Options:
+  -h, --help          Show this help message
+  -v, --version       Show version number
+
+Examples:
+  weavr-gen                       Use default embedder.json
+  weavr-gen ./api-spec.json       Use custom spec file
+  weavr-gen --help                Show help
+`);
+}
 
 function runVague(vagueFile: string, jsonOutput: string): Promise<void> {
   return new Promise((resolvePromise, reject) => {
@@ -43,7 +79,22 @@ function runVague(vagueFile: string, jsonOutput: string): Promise<void> {
 
 async function main() {
   const args = process.argv.slice(2);
-  const specPath = args[0] ?? "./embedder.json";
+
+  // Handle CLI flags
+  if (args.includes("-h") || args.includes("--help")) {
+    printHelp();
+    process.exit(0);
+  }
+
+  if (args.includes("-v") || args.includes("--version")) {
+    const version = await getVersion();
+    console.log(`weavr-gen v${version}`);
+    process.exit(0);
+  }
+
+  // Filter out any flags to get the spec path
+  const nonFlagArgs = args.filter((arg) => !arg.startsWith("-"));
+  const specPath = nonFlagArgs[0] ?? "./embedder.json";
 
   console.log("Weavr Data Generator\n");
   console.log(`Loading OpenAPI spec from: ${specPath}\n`);
