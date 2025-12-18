@@ -1,8 +1,4 @@
-import type {
-  OpenAPISpec,
-  OpenAPISchema,
-  FieldConstraints,
-} from "./types.js";
+import type { OpenAPISpec, OpenAPISchema, FieldConstraints } from "./types.js";
 
 export interface GeneratorOptions {
   specPath: string;
@@ -115,10 +111,7 @@ export function generateVagueFileWithOverrides(
 
 const LONG_ENUM_THRESHOLD = 5; // Extract to let binding if more than this many values
 
-function generateFieldOverrides(
-  spec: OpenAPISpec,
-  schema: OpenAPISchema
-): OverrideResult {
+function generateFieldOverrides(spec: OpenAPISpec, schema: OpenAPISchema): OverrideResult {
   const overrides: string[] = [];
   const letBindings: LetBinding[] = [];
   const properties = schema.properties ?? {};
@@ -192,7 +185,8 @@ function generateFieldOverride(
   // Format-based generators
   if (constraints.format === "email") return simple("email()");
   if (constraints.format === "uuid") return simple("uuid()");
-  if (constraints.format === "uri" || constraints.format === "url") return simple("faker.internet.url()");
+  if (constraints.format === "uri" || constraints.format === "url")
+    return simple("faker.internet.url()");
   if (constraints.format === "date") return simple('dateBetween("2020-01-01", "2025-12-31")');
   if (constraints.format === "date-time") return simple("datetime(2020, 2025)");
   if (constraints.format === "int64" && isTimestampField(name)) {
@@ -232,20 +226,32 @@ function generateFieldOverride(
 
   // Name fields
   if (nameLower === "firstname" || nameLower === "first_name") return simple("firstName()");
-  if (nameLower === "lastname" || nameLower === "last_name" || nameLower === "surname") return simple("lastName()");
-  if (nameLower === "name" || nameLower === "fullname" || nameLower === "full_name") return simple("fullName()");
+  if (nameLower === "lastname" || nameLower === "last_name" || nameLower === "surname")
+    return simple("lastName()");
+  if (nameLower === "name" || nameLower === "fullname" || nameLower === "full_name")
+    return simple("fullName()");
   if (nameLower === "companyname" || nameLower === "company" || nameLower === "businessname") {
     return simple("companyName()");
   }
 
   // Address fields
-  if (nameLower === "address" || nameLower === "streetaddress" || nameLower.includes("address_line")) {
+  if (
+    nameLower === "address" ||
+    nameLower === "streetaddress" ||
+    nameLower.includes("address_line")
+  ) {
     return simple("streetAddress()");
   }
   if (nameLower === "city") return simple("city()");
-  if (nameLower === "state" || nameLower === "province" || nameLower === "region") return simple("state()");
+  if (nameLower === "state" || nameLower === "province" || nameLower === "region")
+    return simple("state()");
   if (nameLower === "country") return simple('"GB" | "US" | "DE" | "FR" | "ES" | "IT" | "NL"');
-  if (nameLower === "postcode" || nameLower === "postalcode" || nameLower === "zipcode" || nameLower === "zip") {
+  if (
+    nameLower === "postcode" ||
+    nameLower === "postalcode" ||
+    nameLower === "zipcode" ||
+    nameLower === "zip"
+  ) {
     return simple("zipCode()");
   }
 
@@ -307,7 +313,10 @@ function generateFieldOverride(
   if (schema.type === "boolean") return null;
 
   // Integer with bounds
-  if (schema.type === "integer" && (constraints.minimum !== undefined || constraints.maximum !== undefined)) {
+  if (
+    schema.type === "integer" &&
+    (constraints.minimum !== undefined || constraints.maximum !== undefined)
+  ) {
     const min = constraints.minimum ?? 0;
     const max = constraints.maximum ?? 1000000;
     return simple(`int in ${min}..${max}`);

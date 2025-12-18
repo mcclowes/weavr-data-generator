@@ -94,8 +94,6 @@ describe("parseSchema", () => {
   });
 
   it("throws for non-existent schema", () => {
-    expect(() => parseSchema(mockSpec, "NonExistent")).toThrow(
-      'Schema "NonExistent" not found'
-    );
+    expect(() => parseSchema(mockSpec, "NonExistent")).toThrow('Schema "NonExistent" not found');
   });
 });
