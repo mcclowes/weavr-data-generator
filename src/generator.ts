@@ -38,21 +38,57 @@ export function generateVagueFile(options: GeneratorOptions): string {
   return lines.join("\n");
 }
 
+interface LetBinding {
+  name: string;
+  value: string;
+}
+
+interface OverrideResult {
+  overrides: string[];
+  letBindings: LetBinding[];
+}
+
 export function generateVagueFileWithOverrides(
   spec: OpenAPISpec,
   options: GeneratorOptions
 ): string {
   const { specPath, schemaNames, datasetName, counts } = options;
   const lines: string[] = [];
+  const allLetBindings: LetBinding[] = [];
 
   lines.push(`import weavr from "${specPath}"`);
-  lines.push("");
 
+  // Collect all overrides and let bindings first
+  const schemaOverrides: Map<string, string[]> = new Map();
   for (const name of schemaNames) {
     const schema = spec.components?.schemas?.[name];
-    const overrides = schema
+    const result = schema
       ? generateFieldOverrides(spec, schema)
-      : [];
+      : { overrides: [], letBindings: [] };
+    schemaOverrides.set(name, result.overrides);
+    allLetBindings.push(...result.letBindings);
+  }
+
+  // Output let bindings (deduplicated)
+  const seenBindings = new Set<string>();
+  const uniqueBindings = allLetBindings.filter((b) => {
+    if (seenBindings.has(b.name)) return false;
+    seenBindings.add(b.name);
+    return true;
+  });
+
+  if (uniqueBindings.length > 0) {
+    lines.push("");
+    for (const binding of uniqueBindings) {
+      lines.push(`let ${binding.name} = ${binding.value}`);
+    }
+  }
+
+  lines.push("");
+
+  // Output schemas
+  for (const name of schemaNames) {
+    const overrides = schemaOverrides.get(name) ?? [];
 
     lines.push(`schema ${name} from weavr.${name} {`);
     if (overrides.length > 0) {
@@ -77,22 +113,28 @@ export function generateVagueFileWithOverrides(
   return lines.join("\n");
 }
 
+const LONG_ENUM_THRESHOLD = 5; // Extract to let binding if more than this many values
+
 function generateFieldOverrides(
   spec: OpenAPISpec,
   schema: OpenAPISchema
-): string[] {
+): OverrideResult {
   const overrides: string[] = [];
+  const letBindings: LetBinding[] = [];
   const properties = schema.properties ?? {};
 
   for (const [name, prop] of Object.entries(properties)) {
     const resolved = resolveSchema(spec, prop);
-    const override = generateFieldOverride(name, resolved, spec);
-    if (override) {
-      overrides.push(override);
+    const result = generateFieldOverride(name, resolved, spec);
+    if (result) {
+      overrides.push(result.override);
+      if (result.letBinding) {
+        letBindings.push(result.letBinding);
+      }
     }
   }
 
-  return overrides;
+  return { overrides, letBindings };
 }
 
 function resolveSchema(spec: OpenAPISpec, schema: OpenAPISchema): OpenAPISchema {
@@ -108,15 +150,29 @@ function resolveSchema(spec: OpenAPISpec, schema: OpenAPISchema): OpenAPISchema 
   return schema;
 }
 
+interface FieldOverrideResult {
+  override: string;
+  letBinding?: LetBinding;
+}
+
 function generateFieldOverride(
   name: string,
   schema: OpenAPISchema,
   _spec: OpenAPISpec
-): string | null {
+): FieldOverrideResult | null {
   // Handle enums first - convert to Vague superposition
   if (schema.enum && schema.enum.length > 0) {
     const values = schema.enum.map((v) => `"${v}"`).join(" | ");
-    return `${name}: ${values}`;
+
+    // Extract long enums to let bindings for readability
+    if (schema.enum.length > LONG_ENUM_THRESHOLD) {
+      const bindingName = `${name}Values`;
+      return {
+        override: `${name}: ${bindingName}`,
+        letBinding: { name: bindingName, value: values },
+      };
+    }
+    return { override: `${name}: ${values}` };
   }
 
   const constraints: FieldConstraints = {
@@ -128,25 +184,30 @@ function generateFieldOverride(
     maximum: schema.maximum,
   };
 
+  // Helper to wrap simple overrides
+  const simple = (value: string): FieldOverrideResult => ({
+    override: `${name}: ${value}`,
+  });
+
   // Format-based generators
-  if (constraints.format === "email") return `${name}: email()`;
-  if (constraints.format === "uuid") return `${name}: uuid()`;
-  if (constraints.format === "uri" || constraints.format === "url") return `${name}: faker.internet.url()`;
-  if (constraints.format === "date") return `${name}: dateBetween("2020-01-01", "2025-12-31")`;
-  if (constraints.format === "date-time") return `${name}: datetime(2020, 2025)`;
+  if (constraints.format === "email") return simple("email()");
+  if (constraints.format === "uuid") return simple("uuid()");
+  if (constraints.format === "uri" || constraints.format === "url") return simple("faker.internet.url()");
+  if (constraints.format === "date") return simple('dateBetween("2020-01-01", "2025-12-31")');
+  if (constraints.format === "date-time") return simple("datetime(2020, 2025)");
   if (constraints.format === "int64" && isTimestampField(name)) {
-    return `${name}: int in 1609459200000..1735689600000`; // 2021-2025 epoch ms
+    return simple("int in 1609459200000..1735689600000"); // 2021-2025 epoch ms
   }
 
   // Pattern-based generators
-  if (constraints.pattern === "^[0-9]+$") return `${name}: unique digits(12)`;
-  if (constraints.pattern === "^[0-9]{6}$") return `${name}: digits(6)`;
-  if (constraints.pattern === "^\\+[0-9]+$") return `${name}: regex("\\\\+[1-9][0-9]{8,14}")`;
+  if (constraints.pattern === "^[0-9]+$") return simple("unique digits(12)");
+  if (constraints.pattern === "^[0-9]{6}$") return simple("digits(6)");
+  if (constraints.pattern === "^\\+[0-9]+$") return simple('regex("\\\\+[1-9][0-9]{8,14}")');
   if (constraints.pattern === "^[a-z]{2}(-[A-Z]{2})?$") {
-    return `${name}: "en" | "en-GB" | "en-US" | "de-DE" | "fr-FR" | "es-ES"`;
+    return simple('"en" | "en-GB" | "en-US" | "de-DE" | "fr-FR" | "es-ES"');
   }
   if (constraints.pattern === "^[A-Z]{3}$") {
-    return `${name}: "EUR" | "GBP" | "USD"`;
+    return simple('"EUR" | "GBP" | "USD"');
   }
 
   // Field name heuristics
@@ -154,92 +215,92 @@ function generateFieldOverride(
 
   // ID fields
   if (nameLower === "id" || nameLower.endsWith("id")) {
-    if (schema.type === "string") return `${name}: unique digits(18)`;
+    if (schema.type === "string") return simple("unique digits(18)");
   }
 
   // Network/Contact fields
   if (nameLower === "ipaddress" || nameLower === "ip" || nameLower.includes("ip_address")) {
-    return `${name}: faker.internet.ip()`;
+    return simple("faker.internet.ip()");
   }
-  if (nameLower === "email" || nameLower.endsWith("email")) return `${name}: email()`;
+  if (nameLower === "email" || nameLower.endsWith("email")) return simple("email()");
   if (nameLower === "phone" || nameLower.includes("mobile") || nameLower.includes("telephone")) {
-    return `${name}: phone()`;
+    return simple("phone()");
   }
   if (nameLower === "url" || nameLower.includes("website") || nameLower.includes("link")) {
-    return `${name}: faker.internet.url()`;
+    return simple("faker.internet.url()");
   }
 
   // Name fields
-  if (nameLower === "firstname" || nameLower === "first_name") return `${name}: firstName()`;
-  if (nameLower === "lastname" || nameLower === "last_name" || nameLower === "surname") return `${name}: lastName()`;
-  if (nameLower === "name" || nameLower === "fullname" || nameLower === "full_name") return `${name}: fullName()`;
+  if (nameLower === "firstname" || nameLower === "first_name") return simple("firstName()");
+  if (nameLower === "lastname" || nameLower === "last_name" || nameLower === "surname") return simple("lastName()");
+  if (nameLower === "name" || nameLower === "fullname" || nameLower === "full_name") return simple("fullName()");
   if (nameLower === "companyname" || nameLower === "company" || nameLower === "businessname") {
-    return `${name}: companyName()`;
+    return simple("companyName()");
   }
 
   // Address fields
   if (nameLower === "address" || nameLower === "streetaddress" || nameLower.includes("address_line")) {
-    return `${name}: streetAddress()`;
+    return simple("streetAddress()");
   }
-  if (nameLower === "city") return `${name}: city()`;
-  if (nameLower === "state" || nameLower === "province" || nameLower === "region") return `${name}: state()`;
-  if (nameLower === "country") return `${name}: "GB" | "US" | "DE" | "FR" | "ES" | "IT" | "NL"`;
+  if (nameLower === "city") return simple("city()");
+  if (nameLower === "state" || nameLower === "province" || nameLower === "region") return simple("state()");
+  if (nameLower === "country") return simple('"GB" | "US" | "DE" | "FR" | "ES" | "IT" | "NL"');
   if (nameLower === "postcode" || nameLower === "postalcode" || nameLower === "zipcode" || nameLower === "zip") {
-    return `${name}: zipCode()`;
+    return simple("zipCode()");
   }
 
   // Date/Time fields
   if (isTimestampField(name)) {
-    if (schema.type === "integer") return `${name}: int in 1609459200000..1735689600000`;
-    return `${name}: datetime(2020, 2025)`;
+    if (schema.type === "integer") return simple("int in 1609459200000..1735689600000");
+    return simple("datetime(2020, 2025)");
   }
   if (nameLower.includes("date") && !nameLower.includes("timestamp")) {
-    return `${name}: dateBetween("2020-01-01", "2025-12-31")`;
+    return simple('dateBetween("2020-01-01", "2025-12-31")');
   }
 
   // Currency/Money fields
   if (nameLower === "currency" || nameLower === "currencycode" || nameLower === "basecurrency") {
-    return `${name}: "EUR" | "GBP" | "USD"`;
+    return simple('"EUR" | "GBP" | "USD"');
   }
   if (nameLower === "amount" || nameLower.includes("amount") || nameLower === "balance") {
-    return `${name}: int in 1000..100000`;
+    return simple("int in 1000..100000");
   }
   if (nameLower === "iban" || nameLower.includes("iban")) {
-    return `${name}: faker.finance.iban()`;
+    return simple("faker.finance.iban()");
   }
   if (nameLower === "bic" || nameLower === "swift" || nameLower.includes("swiftcode")) {
-    return `${name}: faker.finance.bic()`;
+    return simple("faker.finance.bic()");
   }
   if (nameLower.includes("accountnumber") || nameLower === "accountno") {
-    return `${name}: faker.finance.accountNumber()`;
+    return simple("faker.finance.accountNumber()");
   }
 
   // Document fields
   if (nameLower === "description" || nameLower === "notes" || nameLower === "comment") {
-    return `${name}: sentence()`;
+    return simple("sentence()");
   }
 
   // Status/Type fields (often have no enum but should)
   if (nameLower === "status" && schema.type === "string") {
-    return `${name}: "ACTIVE" | "INACTIVE" | "PENDING"`;
+    return simple('"ACTIVE" | "INACTIVE" | "PENDING"');
   }
   if (nameLower === "type" && schema.type === "string" && !schema.enum) {
-    return `${name}: "DEFAULT"`;
+    return simple('"DEFAULT"');
   }
 
   // Tag fields
   if (nameLower === "tag" && schema.type === "string") {
-    return `${name}: alphanumeric(8)`;
+    return simple("alphanumeric(8)");
   }
 
   // Fee/Group fields
   if (nameLower.includes("fee") || nameLower.includes("group")) {
-    return `${name}: "DEFAULT" | "STANDARD" | "PREMIUM"`;
+    return simple('"DEFAULT" | "STANDARD" | "PREMIUM"');
   }
 
   // Source fields
   if (nameLower.includes("sourceof") || nameLower.includes("source_of")) {
-    return `${name}: "SALARY" | "SAVINGS" | "BUSINESS" | "INVESTMENT"`;
+    return simple('"SALARY" | "SAVINGS" | "BUSINESS" | "INVESTMENT"');
   }
 
   // Boolean fields don't need override - OpenAPI handles them
@@ -249,7 +310,7 @@ function generateFieldOverride(
   if (schema.type === "integer" && (constraints.minimum !== undefined || constraints.maximum !== undefined)) {
     const min = constraints.minimum ?? 0;
     const max = constraints.maximum ?? 1000000;
-    return `${name}: int in ${min}..${max}`;
+    return simple(`int in ${min}..${max}`);
   }
 
   return null;
