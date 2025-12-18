@@ -94,7 +94,7 @@ describe("generateVagueFileWithOverrides", () => {
       counts: { User: 5 },
     });
 
-    expect(output).toContain("id: digits(12)");
+    expect(output).toContain("id: unique digits(12)");
   });
 
   it("generates locale superposition for locale patterns", () => {
