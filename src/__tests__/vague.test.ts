@@ -26,7 +26,53 @@ describe("Vague data generation", () => {
     const data = await generateData(vaguePath, jsonPath, { seed: 42 });
 
     expect(data.users).toHaveLength(2);
-    expect(data.users[0]).toEqual({ name: expect.any(String), active: expect.any(Boolean) });
+    const user = data.users[0] as Record<string, unknown>;
+    expect(user).toEqual({
+      name: expect.any(String),
+      active: expect.any(Boolean),
+      email: expect.stringMatching(/^[^@]+@[^@]+\.[^@]+$/),
+      code: expect.stringMatching(/^[A-Z]{6}$/),
+      score: expect.any(Number),
+      role: expect.stringMatching(/^(ADMIN|MEMBER)$/),
+      tags: [expect.any(String), expect.any(String)],
+      profile: { nickname: expect.any(String) },
+    });
+    expect(user.score as number).toBeGreaterThanOrEqual(10);
+    expect(user.score as number).toBeLessThanOrEqual(20);
     expect(JSON.parse(await readFile(jsonPath, "utf-8"))).toEqual(data);
+  });
+
+  it("loads schemas from YAML OpenAPI documents", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "weavr-data-generator-"));
+    const specPath = join(directory, "openapi.yaml");
+
+    await writeFile(
+      specPath,
+      [
+        "openapi: 3.1.0",
+        "info:",
+        "  title: YAML API",
+        "  version: 1.0.0",
+        "paths: {}",
+        "components:",
+        "  schemas:",
+        "    User:",
+        "      type: object",
+        "      properties:",
+        "        name:",
+        "          type: string",
+      ].join("\n"),
+      "utf-8"
+    );
+
+    await expect(loadOpenAPISchemaNames(specPath)).resolves.toEqual(["User"]);
+  });
+
+  it("rejects invalid OpenAPI documents", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "weavr-data-generator-"));
+    const specPath = join(directory, "invalid.json");
+    await writeFile(specPath, JSON.stringify({ components: { schemas: {} } }), "utf-8");
+
+    await expect(loadOpenAPISchemaNames(specPath)).rejects.toThrow(/OpenAPI/i);
   });
 });

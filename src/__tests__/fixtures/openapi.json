@@ -9,10 +9,32 @@
     "schemas": {
       "User": {
         "type": "object",
-        "required": ["name", "active"],
+        "required": ["name", "active", "email", "code", "score", "role", "tags", "profile"],
         "properties": {
           "name": { "type": "string" },
-          "active": { "type": "boolean" }
+          "active": { "type": "boolean" },
+          "email": { "type": "string", "format": "email" },
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Z]{6}$",
+            "minLength": 6,
+            "maxLength": 6
+          },
+          "score": { "type": "integer", "minimum": 10, "maximum": 20 },
+          "role": { "type": "string", "enum": ["ADMIN", "MEMBER"] },
+          "tags": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": { "type": "string" }
+          },
+          "profile": {
+            "type": "object",
+            "required": ["nickname"],
+            "properties": {
+              "nickname": { "type": "string" }
+            }
+          }
         }
       }
     }
