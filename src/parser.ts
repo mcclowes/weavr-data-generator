@@ -1,4 +1,5 @@
 import { readFile } from "fs/promises";
+import { OpenAPILoader } from "vague-lang";
 import type {
   OpenAPISpec,
   OpenAPISchema,
@@ -11,6 +12,17 @@ import type {
 export async function loadOpenAPISpec(path: string): Promise<OpenAPISpec> {
   const content = await readFile(path, "utf-8");
   return JSON.parse(content) as OpenAPISpec;
+}
+
+/**
+ * Load the schemas Vague can import from an OpenAPI document.
+ *
+ * Vague owns OpenAPI parsing and reference resolution here, so this supports
+ * every input format supported by Vague rather than only JSON documents.
+ */
+export async function loadOpenAPISchemaNames(path: string): Promise<string[]> {
+  const schemas = await new OpenAPILoader().load(path);
+  return [...schemas.keys()].sort();
 }
 
 export function extractSchemaNames(spec: OpenAPISpec): string[] {

@@ -1,0 +1,20 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Fixture API",
+    "version": "1.0.0"
+  },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "User": {
+        "type": "object",
+        "required": ["name", "active"],
+        "properties": {
+          "name": { "type": "string" },
+          "active": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

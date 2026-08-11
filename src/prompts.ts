@@ -1,6 +1,4 @@
 import { checkbox, input, confirm, Separator } from "@inquirer/prompts";
-import type { OpenAPISpec } from "./types.js";
-import { extractSchemaNames } from "./parser.js";
 
 // Group schemas by category based on common prefixes/patterns
 function categorizeSchemas(names: string[]): Map<string, string[]> {
@@ -21,28 +19,25 @@ function categorizeSchemas(names: string[]): Map<string, string[]> {
     let matched = false;
     for (const [pattern, category] of categoryPatterns) {
       if (pattern.test(name)) {
-        if (!categories.has(category)) {
-          categories.set(category, []);
-        }
-        categories.get(category)!.push(name);
+        const schemas = categories.get(category) ?? [];
+        schemas.push(name);
+        categories.set(category, schemas);
         matched = true;
         break;
       }
     }
     if (!matched) {
-      if (!categories.has("Other")) {
-        categories.set("Other", []);
-      }
-      categories.get("Other")!.push(name);
+      const schemas = categories.get("Other") ?? [];
+      schemas.push(name);
+      categories.set("Other", schemas);
     }
   }
 
   return categories;
 }
 
-export async function promptForSchemas(spec: OpenAPISpec): Promise<string[]> {
-  const allSchemas = extractSchemaNames(spec);
-  const categories = categorizeSchemas(allSchemas);
+export async function promptForSchemas(schemaNames: string[]): Promise<string[]> {
+  const categories = categorizeSchemas(schemaNames);
 
   // Build choices with separators for categories
   const choices: Array<{ name: string; value: string } | Separator> = [];

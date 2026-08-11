@@ -1,6 +1,6 @@
 # Weavr Data Generator
 
-Generate [Vague](https://github.com/mcclowes/vague) schemas from Weavr OpenAPI specifications for creating realistic JSON test fixtures.
+Convert OpenAPI schemas into realistic JSON test data with [Vague](https://github.com/mcclowes/vague).
 
 ## Quick Start
 
@@ -32,9 +32,11 @@ embedder.json (OpenAPI) → weavr-gen → fixtures.vague + fixtures.json
 ```
 
 The tool:
-- Imports the OpenAPI spec directly (no duplication)
-- Generates schema extensions with smart field overrides
-- Automatically runs Vague CLI to produce JSON fixtures
+
+- Uses Vague to load and resolve the OpenAPI schemas
+- Writes a small, reusable `.vague` dataset definition
+- Uses Vague's Node API to generate JSON without spawning another process
+- Accepts JSON or YAML OpenAPI documents supported by Vague
 
 ## Example Output
 
@@ -42,13 +44,11 @@ The tool:
 import weavr from "./embedder.json"
 
 schema ManagedAccount from weavr.ManagedAccount {
-  id: digits(12)
-  // Add more field overrides as needed
+  // Add Vague overrides here when the OAS constraints aren't enough
 }
 
 schema User from weavr.User {
-  email: email()
-  locale: "en" | "en-GB" | "en-US" | "de" | "fr"
+  // For example: email: email()
 }
 
 dataset WeavrFixtures {
@@ -57,11 +57,11 @@ dataset WeavrFixtures {
 }
 ```
 
-The generated `.vague` file imports from the OpenAPI spec and only includes field overrides where custom Vague generators improve data quality (emails, locales, numeric IDs, etc.).
+The OpenAPI document remains the source of truth. Edit the generated `.vague` file when you want richer distributions, relationships, or field overrides, then run it again with Vague.
 
 ## Development
 
 ```bash
 npm run dev   # Watch mode
-npm test      # Run tests
+npm run test:run
 ```

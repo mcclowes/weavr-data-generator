@@ -7,8 +7,9 @@ CLI tool that generates Vague schema files from Weavr OpenAPI specifications.
 ```
 src/
 ├── types.ts      # TypeScript interfaces for OpenAPI and parsed schemas
-├── parser.ts     # OpenAPI spec loader and schema parser
-├── generator.ts  # Converts parsed schemas to Vague syntax with smart overrides
+├── parser.ts     # Vague-backed OpenAPI schema discovery and legacy parser API
+├── generator.ts  # Writes Vague dataset definitions
+├── vague.ts      # Generates and persists data through Vague's Node API
 ├── prompts.ts    # Interactive CLI prompts (inquirer)
 ├── cli.ts        # Entry point
 └── index.ts      # Public API exports
@@ -26,10 +27,11 @@ npm run test:run  # Run tests once
 
 ## Key Concepts
 
-- **OpenAPI → Vague**: Converts OpenAPI 3.x schemas to Vague declarative data generation syntax
+- **OpenAPI → data**: Vague loads OpenAPI 3.x schemas and generates the requested dataset
+- **No subprocess**: Generation uses Vague's `fromFile` API directly
 - **$ref resolution**: Follows `#/components/schemas/X` references to get actual constraints
 - **Topological sort**: Outputs schemas in dependency order (dependencies before dependents)
-- **Smart field overrides**: Generates appropriate Vague generators based on:
+- **Optional smart field overrides**: The public generator API can add Vague generators based on:
   - OpenAPI `format` (email, uuid, date-time, int64)
   - OpenAPI `pattern` regex (e.g., `^[0-9]+$` → `digits(12)`)
   - OpenAPI `enum` values → Vague superpositions
@@ -43,7 +45,7 @@ Tests are in `src/__tests__/`. Run with `npm run test:run`.
 
 ## Output
 
-Generated `.vague` files should be run through the Vague CLI to produce JSON:
+Generated `.vague` files can also be run directly through the Vague CLI:
 ```bash
 npx vague-lang output/fixtures.vague -o fixtures.json
 ```
